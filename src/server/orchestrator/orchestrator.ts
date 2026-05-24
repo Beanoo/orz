@@ -2,17 +2,19 @@ import type { DeliverySession, DeliveryStageEvent, MemoryRecord, StageName, Stag
 import { applyArticleCoverImagePatch } from "../services/articleCoverImagePatch";
 import { config } from "../services/config";
 import { commitDelivery, inspectGitSafety, runTargetVerification, writeDeliveryEvidence } from "../services/gitDelivery";
+import { generateAndApplyModelPatch } from "../services/modelPatch";
 import { generateImplementationPlan } from "../services/modelAdapter";
 import { buildRepositorySnapshot } from "../services/repositoryIndex";
 import { appendEvent, listMemory, saveDelivery, saveMemory } from "../persistence/store";
 import { buildConsistencyContracts, locateModules } from "./moduleLocator";
-import { parseRequirement } from "./requirementParser";
+import { parseRequirementWithModel } from "./requirementParser";
 import { planSkills } from "./skills";
 
 export async function createDelivery(rawRequirement: string): Promise<DeliverySession> {
   const now = new Date().toISOString();
   const id = `d-${compactTimestamp(now)}`;
-  const { dsl, questions } = parseRequirement(rawRequirement, config.targetRepository);
+  const parsed = await parseRequirementWithModel(rawRequirement, config.targetRepository);
+  const { dsl, questions } = parsed;
   const memoryMatches = await recallMemory(rawRequirement);
   const gitSafety = await inspectGitSafety();
   const session: DeliverySession = {
@@ -42,6 +44,9 @@ export async function createDelivery(rawRequirement: string): Promise<DeliverySe
     memoryMatches,
     events: [],
   };
+  if (parsed.metric) {
+    session.aiMetrics.push(parsed.metric);
+  }
 
   await runPlanningStages(session);
   await saveDelivery(session);
@@ -57,8 +62,14 @@ export async function approveDelivery(session: DeliverySession): Promise<Deliver
   if (!safety.safeToOperate) {
     return fail(session, "apply", safety.refusalReason ?? "目标仓不安全。");
   }
-  await record(session, "apply", "running", "写入 Conduiteg 交付证据。");
-  const codeFiles = await applyCodeChanges(session);
+  await record(session, "apply", "running", "写入 Conduiteg 代码变更和交付证据。");
+  let codeFiles: string[];
+  try {
+    codeFiles = await applyCodeChanges(session);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "代码变更应用失败。";
+    return fail(session, "apply", message);
+  }
   const evidenceFile = await writeDeliveryEvidence(session);
   session.git.changedFiles = [...codeFiles, evidenceFile];
   await record(session, "apply", "passed", `已写入 ${codeFiles.length} 个代码文件和 ${evidenceFile}。`, {
@@ -96,7 +107,7 @@ export async function approveDelivery(session: DeliverySession): Promise<Deliver
 async function applyCodeChanges(session: DeliverySession): Promise<string[]> {
   const hasArticleCover = session.dsl.intents.some((intent) => intent.entity === "Article" && intent.field === "coverImage");
   if (!hasArticleCover) {
-    return [];
+    return generateAndApplyModelPatch(session);
   }
   return applyArticleCoverImagePatch();
 }

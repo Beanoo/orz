@@ -31,3 +31,17 @@ then mapped to existing Atomic Skills. Add a recipe only when it captures repeat
 planning experience. Add a new Skill only when existing Atomic Skills cannot
 express the capability. Add a plugin-style runtime extension only when new tools
 or execution surfaces are required.
+
+## Real Model Path
+
+The model adapter supports OpenAI-compatible `/chat/completions` endpoints. It is
+used in two places:
+
+- `parse-requirement-dsl`: converts PM text into DSL, questions, assumptions,
+  contradictions, and acceptance criteria.
+- `generate-unified-diff`: creates a patch for requirements that are not covered
+  by deterministic fallback recipes.
+
+Generated patches are treated as untrusted output. ORZ writes them to
+`data/generated-patches`, runs `git apply --check`, then applies them only when
+the patch is valid for the current Conduiteg checkout.

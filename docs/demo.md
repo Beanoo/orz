@@ -34,3 +34,17 @@ The current verified Conduiteg demo commit is:
 ```text
 4a4fe21 docs(e2e): Article.coverImage 跨栈交付
 ```
+
+## Real Requirement Mode
+
+Set:
+
+```bash
+MODEL_PROVIDER=openai-compatible
+OPENAI_API_KEY=...
+OPENAI_COMPATIBLE_MODEL=gpt-4.1
+```
+
+Then restart ORZ. Arbitrary PM requirements will be sent to the model for DSL
+extraction and, after approval, unified diff generation. The patch is only
+applied if `git apply --check` passes.

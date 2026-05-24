@@ -36,11 +36,28 @@ npm run build
 SYSTEM_REPOSITORY=git@github.com:Beanoo/orz.git
 TARGET_REPOSITORY=git@github.com:Beanoo/Conduiteg.git
 TARGET_PATH=/Users/doumengyao/work/Conduiteg
-CODEX_COMMAND=codex
-CODEX_MODEL=local-codex
-CODEX_MODEL_ENABLED=0
-CODEX_MODEL_TIMEOUT_MS=120000
+
+# Real model adapter. Any OpenAI-compatible /chat/completions endpoint works.
+MODEL_PROVIDER=openai-compatible
+OPENAI_COMPATIBLE_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=...
+OPENAI_COMPATIBLE_MODEL=gpt-4.1
 ```
+
+Without `MODEL_PROVIDER=openai-compatible` and an API key, ORZ still uses the
+real repository, JSON event store, Git operations, and verification commands, but
+model-driven requirement parsing and generic patch generation are skipped. In
+that mode only deterministic fallback recipes, currently `Article.coverImage`,
+can apply code changes.
+
+With a real model configured:
+
+- PM input is converted to Requirement DSL by the model.
+- Clarification questions, assumptions, contradictions, and acceptance criteria
+  come from model analysis.
+- Non-fallback requirements ask the model for a unified diff.
+- ORZ runs `git apply --check` before writing the patch to Conduiteg.
+- Verification failure blocks commit.
 
 ## Delivery Flow
 
@@ -60,3 +77,19 @@ The first implemented L2 delivery is:
 It propagates `Article.coverImage` through Sequelize model/migration, Express
 controller, frontend service, editor form, article previews, article detail view,
 and delivery evidence.
+
+## What Is Real vs Fallback
+
+Real today:
+
+- Frontend and API runtime.
+- Local JSON sessions, JSONL events, memory, metrics, and runtime state.
+- Conduiteg remote/path safety checks.
+- Branch creation, file writes, verification commands, commits, and pushes.
+- The `Article.coverImage` L2 delivery path.
+
+Fallback unless a real model is configured:
+
+- Requirement DSL extraction for arbitrary product requirements.
+- Implementation plan generation.
+- Generic code patch generation for requirements outside known recipes.

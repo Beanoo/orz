@@ -4,6 +4,7 @@ dist
 .env
 .env.local
 data/runtime.json
+data/generated-patches
 data/deliveries/*.json
 data/events/*.jsonl
 data/memory/*.json

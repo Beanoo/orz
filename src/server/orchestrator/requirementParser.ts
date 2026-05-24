@@ -1,4 +1,5 @@
 import type { ClarificationQuestion, RequirementDsl, RequirementIntent } from "../../shared/domain";
+import { callModel } from "../services/modelAdapter";
 
 const articleWords = ["文章", "article", "Article"];
 const coverWords = ["封面", "cover", "coverImage", "image"];
@@ -119,4 +120,113 @@ export function parseRequirement(rawInput: string, targetRepository: string): {
   };
 
   return { dsl, questions };
+}
+
+export async function parseRequirementWithModel(rawInput: string, targetRepository: string): Promise<{
+  dsl: RequirementDsl;
+  questions: ClarificationQuestion[];
+  metric?: Awaited<ReturnType<typeof callModel>>["metric"];
+  source: "model" | "fallback";
+}> {
+  const fallback = parseRequirement(rawInput, targetRepository);
+  const prompt = [
+    "把下面 PM 需求抽取成机器可读交付 DSL。",
+    "只返回 JSON，不要 markdown。",
+    "JSON shape:",
+    JSON.stringify(
+      {
+        title: "short title",
+        status: "ready | needs-clarification | contradictory",
+        role: "PM",
+        intents: [
+          {
+            id: "intent-1",
+            kind: "add-field | persist-data | expose-api | edit-form | render-view | test-contract | verify-delivery",
+            entity: "optional domain entity",
+            field: "optional field",
+            acceptance: ["concrete acceptance criterion"],
+          },
+        ],
+        assumptions: ["safe default assumptions"],
+        contradictions: ["blocking contradictions"],
+        acceptanceCriteria: ["end-to-end acceptance criteria"],
+        clarificationQuestions: [
+          {
+            id: "q-1",
+            priority: "must | should | could",
+            question: "question",
+            reason: "why it matters",
+            defaultAnswer: "optional safe default",
+          },
+        ],
+      },
+      null,
+      2,
+    ),
+    "",
+    `targetRepository: ${targetRepository}`,
+    `rawRequirement: ${rawInput}`,
+  ].join("\n");
+
+  const model = await callModel("parse-requirement-dsl", prompt);
+  if (model.metric.status !== "passed") {
+    return { ...fallback, metric: model.metric, source: "fallback" };
+  }
+
+  try {
+    const parsed = JSON.parse(stripJsonFence(model.text)) as {
+      title?: string;
+      status?: RequirementDsl["status"];
+      role?: string;
+      intents?: RequirementIntent[];
+      assumptions?: string[];
+      contradictions?: string[];
+      acceptanceCriteria?: string[];
+      clarificationQuestions?: ClarificationQuestion[];
+    };
+    const questions = normalizeQuestions(parsed.clarificationQuestions ?? []);
+    const dsl: RequirementDsl = {
+      id: `dsl-${Date.now()}`,
+      title: parsed.title || fallback.dsl.title,
+      rawInput,
+      status: parsed.status ?? fallback.dsl.status,
+      role: parsed.role || "PM",
+      targetRepository,
+      intents: normalizeIntents(parsed.intents ?? fallback.dsl.intents),
+      assumptions: parsed.assumptions ?? fallback.dsl.assumptions,
+      contradictions: parsed.contradictions ?? fallback.dsl.contradictions,
+      acceptanceCriteria: parsed.acceptanceCriteria ?? fallback.dsl.acceptanceCriteria,
+    };
+    return { dsl, questions, metric: model.metric, source: "model" };
+  } catch {
+    return { ...fallback, metric: model.metric, source: "fallback" };
+  }
+}
+
+function normalizeIntents(intents: RequirementIntent[]): RequirementIntent[] {
+  return intents.map((intent, index) => ({
+    id: intent.id || `intent-${index + 1}`,
+    kind: intent.kind,
+    entity: intent.entity,
+    field: intent.field,
+    acceptance: Array.isArray(intent.acceptance) ? intent.acceptance : [],
+  }));
+}
+
+function normalizeQuestions(questions: ClarificationQuestion[]): ClarificationQuestion[] {
+  return questions.map((question, index) => ({
+    id: question.id || `q-${index + 1}`,
+    priority: question.priority ?? "should",
+    question: question.question,
+    reason: question.reason,
+    defaultAnswer: question.defaultAnswer,
+  }));
+}
+
+function stripJsonFence(value: string): string {
+  return value
+    .trim()
+    .replace(/^```json\s*/i, "")
+    .replace(/^```\s*/i, "")
+    .replace(/\s*```$/i, "");
 }
