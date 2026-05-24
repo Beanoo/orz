@@ -1,0 +1,14 @@
+.DS_Store
+node_modules
+dist
+.env
+.env.local
+data/runtime.json
+data/deliveries/*.json
+data/events/*.jsonl
+data/memory/*.json
+data/metrics/*.jsonl
+!data/deliveries/.gitkeep
+!data/events/.gitkeep
+!data/memory/.gitkeep
+!data/metrics/.gitkeep
