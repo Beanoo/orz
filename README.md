@@ -39,9 +39,9 @@ TARGET_PATH=/Users/doumengyao/work/Conduiteg
 
 # Real model adapter. Any OpenAI-compatible /chat/completions endpoint works.
 MODEL_PROVIDER=openai-compatible
-OPENAI_COMPATIBLE_BASE_URL=https://api.openai.com/v1
-OPENAI_API_KEY=...
-OPENAI_COMPATIBLE_MODEL=gpt-4.1
+OPENAI_COMPATIBLE_BASE_URL=https://ark.cn-beijing.volces.com/api/v3
+OPENAI_COMPATIBLE_MODEL=ep-20260514110933-mzh58
+OPENAI_COMPATIBLE_API_KEY=...
 ```
 
 Without `MODEL_PROVIDER=openai-compatible` and an API key, ORZ still uses the
